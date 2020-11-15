@@ -70,6 +70,8 @@
 #religious census:
 #downloaded xls version here: https://www.thearda.com/Archive/ChCounty.asp
 #I think this is the dataset behind http://usreligioncensus.org/ but not sure
+#NOTE: they have 2000 and 2010 data. The 2010 data seems to predict noticeably
+#better than the 2000 data so using that only in the regressions
 "raw/religion.csv" <-
     wget 'https://files.osf.io/v1/resources/b6n84/providers/osfstorage/5f2b43d85f705a0306619604?action=download&direct&version=1' -O - | any2csv | pcsv -g 'r["YEAR"] in ["2000","2010"]' > $OUTPUT0
 
@@ -106,25 +108,25 @@
     pcsv -g 'r["year"] == "2008"' -f fips/county_voting.csv > /tmp/voting_2008.csv
     pcsv -g 'r["year"] == "2000"' -f fips/county_area.csv > /tmp/area_2000.csv
     pcsv -g 'r["year"] == "2008"' -f fips/county_pop_2000s.csv > /tmp/pop_2008.csv
-    pcsv -g 'r["YEAR"] == "2000"' -f fips/religion.csv > /tmp/religion_2000.csv
+    pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate 0 area
-    less /tmp/voting_2008.csv | pjoin --left -k fips /tmp/religion_2000.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2008.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2008.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2008.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
 
 "election/election_2004.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2010.csv", "fips/inc_2010.csv"
     pcsv -g 'r["year"] == "2004"' -f fips/county_voting.csv > /tmp/voting_2004.csv
     pcsv -g 'r["year"] == "2000"' -f fips/county_area.csv > /tmp/area_2000.csv
     pcsv -g 'r["year"] == "2004"' -f fips/county_pop_2000s.csv > /tmp/pop_2004.csv
-    pcsv -g 'r["YEAR"] == "2000"' -f fips/religion.csv > /tmp/religion_2000.csv
+    pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate counties with 0 area
-    less /tmp/voting_2004.csv | pjoin --left -k fips /tmp/religion_2000.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2004.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2004.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2004.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
 
 "election/election_2000.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2010.csv", "fips/inc_2010.csv"
     pcsv -g 'r["year"] == "2000"' -f fips/county_voting.csv > /tmp/voting_2000.csv
     pcsv -g 'r["year"] == "2000"' -f fips/county_area.csv > /tmp/area_2000.csv
     pcsv -g 'r["year"] == "2000"' -f fips/county_pop_2000s.csv > /tmp/pop_2000.csv
-    pcsv -g 'r["YEAR"] == "2000"' -f fips/religion.csv > /tmp/religion_2000.csv
+    pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate counties with 0 area
-    less /tmp/voting_2000.csv | pjoin --left -k fips /tmp/religion_2000.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2000.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2000.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2000.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
 
 
 "%regress" <-

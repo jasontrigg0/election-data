@@ -14,7 +14,7 @@ def process_row(row):
     fips = f'{int(row["STATE"]):02}{int(row["COUNTY"]):03}'
     #population = row[f"POPESTIMATE{yr}"]
     population = int(row["TOT_POP"])
-    white_pop = int(row["WA_MALE"]) + int(row["WA_FEMALE"])
+    white_pop = int(row["NHWA_MALE"]) + int(row["NHWA_FEMALE"])
     black_pop = int(row["BA_MALE"]) + int(row["BA_FEMALE"])
     hispanic_pop = int(row["H_MALE"]) + int(row["H_FEMALE"])
     yr = 2007 + int(row["YEAR"])

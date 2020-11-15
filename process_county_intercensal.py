@@ -30,7 +30,7 @@ if __name__ == "__main__":
         for fips, info in info_by_fips(reader):
             for yr in range(2000,2011):
                 population = int(info[("0","0","0")][f"POPESTIMATE{yr}"])
-                white_pop = int(info[("0","0","1")][f"POPESTIMATE{yr}"])
+                white_pop = int(info[("0","1","1")][f"POPESTIMATE{yr}"]) #ORIGIN 1 = for non hispanic whites
                 black_pop = int(info[("0","0","2")][f"POPESTIMATE{yr}"])
                 hispanic_pop = int(info[("0","2","0")][f"POPESTIMATE{yr}"])
                 writer.writerow({

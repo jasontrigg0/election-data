@@ -88,8 +88,23 @@
 "fips/county_voting.csv" <- "raw/countypres_2000-2016.csv"
     python3 process_voting_data.py -f $INPUT0 > $OUTPUT0
 
+#preliminary 2020 data from NYT (pulled on 2020-11-15, not final)
+"raw/nyt_president_2020.json" <-
+    wget https://static01.nyt.com/elections-assets/2020/data/api/2020-11-03/national-map-page/national/president.json -O - > $OUTPUT0
+
+"raw/counties_2020.csv" <- "raw/nyt_president_2020.json"
+    less $INPUT0 | any2csv --path data,races | pcsv -c counties > $OUTPUT0
+
+"fips/voting_2020.csv" <- "raw/counties_2020.csv"
+    python3 process_nyt_2020.py -f $INPUT0 > $OUTPUT0
 
 #process data for each presidential election
+"election/election_2020.csv" <-"fips/voting_2020.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2018.csv", "fips/inc_2018.csv"
+    pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
+    pcsv -g 'r["year"] == "2019"' -f fips/county_pop_2010s.csv > /tmp/pop_2019.csv
+    pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
+    less fips/voting_2020.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2019.csv | pjoin --left -k fips fips/edu_2018.csv | pjoin --left -k fips fips/inc_2018.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2018"])) if r["inc_2018"] else ""' > $OUTPUT0
+
 "election/election_2016.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2018.csv", "fips/inc_2018.csv"
     pcsv -g 'r["year"] == "2016"' -f fips/county_voting.csv > /tmp/voting_2016.csv
     pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
@@ -135,3 +150,4 @@
     less election/election_2008.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2010,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
     less election/election_2012.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2014,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
     less election/election_2016.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2018,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
+    less election/election_2020.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2018,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001

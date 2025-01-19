@@ -42,7 +42,7 @@
 #  A) "summary files" located at https://www.census.gov/programs-surveys/acs/data/data-via-ftp.html
 #     this has all the data but seems annoying to process.
 #     could try using this https://github.com/gregbehm/censusACS
-#     or following the instructions listed at the bottom of the readmy
+#     or following the instructions listed at the bottom of the readme
 #  B) Pull tables from https://data.census.gov/
 #     note: click "Customize Table" to choose the county-level data
 #  C) ACS API - this is easiest, but only certain data is available
@@ -58,7 +58,7 @@
 #     https://api.census.gov/data/'${yr}'/acs/acs5/subject?get=NAME,S1501_C02_015E&for=county:*&in=state:*&key=02a10f5e915cd2eeb46008d651b1017b33f7494b
 
 "%acs" <-
-    for yr in 2010 2014 2018;
+    for yr in 2010 2014 2018 2022;
     do
       wget 'https://api.census.gov/data/'${yr}'/acs/acs5/subject?get=NAME,S1501_C02_015E&for=county:*&in=state:*&key=02a10f5e915cd2eeb46008d651b1017b33f7494b' -O - | pawk -p 'write_line(eval(l.replace("null","\"\"").replace("[[","[").replace("]]","]").rstrip(",")))' > raw/acs/edu_${yr}.csv;
       wget 'https://api.census.gov/data/'${yr}'/acs/acs5/subject?get=NAME,S1901_C01_012E&for=county:*&in=state:*&key=02a10f5e915cd2eeb46008d651b1017b33f7494b' -O - | pawk -p 'write_line(eval(l.replace("null","\"\"").replace("[[","[").replace("]]","]").rstrip(",")))' > raw/acs/inc_${yr}.csv;
@@ -82,11 +82,20 @@
 #manually pulled voting data from https://electionlab.mit.edu/data
 #which points to https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ
 #and put dataverse_files/countypres_2000-2016.csv in the raw directory
+#notes: tried out https://dataverse.harvard.edu/api/access/datafile/8092662?format=original&gbrecs=true
+#for the 2020 vote but it had some structure changes, opted to stick with the nyt data instead
 "raw/countypres_2000-2016.csv" <-
     wget 'https://dataverse.harvard.edu/api/access/datafile/3641280?format=original&gbrecs=true' -O - > $OUTPUT0
 
 "fips/county_voting.csv" <- "raw/countypres_2000-2016.csv"
     python3 process_voting_data.py -f $INPUT0 > $OUTPUT0
+
+#2024 data from NYT (pulled on 2025-01-19)
+"raw/nyt_president_2024.json" <-
+    wget https://static01.nyt.com/elections-assets/pages/data/feeds/96c3e55a-4c13-4585-b5f6-78f9de0ec96e/pres-county-data/2024-11-05.json -O - > $OUTPUT0
+
+"fips/voting_2024.csv" <- "raw/nyt_president_2024.json"
+    python3 process_nyt_2024.py -f $INPUT0 > $OUTPUT0
 
 #preliminary 2020 data from NYT (pulled on 2020-11-15, not final)
 "raw/nyt_president_2020.json" <-
@@ -99,25 +108,31 @@
     python3 process_nyt_2020.py -f $INPUT0 > $OUTPUT0
 
 #process data for each presidential election
-"election/election_2020.csv" <-"fips/voting_2020.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2018.csv", "fips/inc_2018.csv"
+"election/election_2024.csv" <-"fips/voting_2024.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2022.csv", "fips/inc_2022.csv"
     pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
     pcsv -g 'r["year"] == "2019"' -f fips/county_pop_2010s.csv > /tmp/pop_2019.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
-    less fips/voting_2020.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2019.csv | pjoin --left -k fips fips/edu_2018.csv | pjoin --left -k fips fips/inc_2018.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2018"])) if r["inc_2018"] else ""' > $OUTPUT0
+    less fips/voting_2024.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2019.csv | pjoin --left -k fips fips/edu_2022.csv | pjoin --left -k fips fips/inc_2022.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2022"])) if r["inc_2022"] and r["inc_2022"] != "-666666666" else ""; r["edu_X_white"] = float(r["edu_2022"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2022"] else ""' > $OUTPUT0
+
+"election/election_2020.csv" <-"fips/voting_2020.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2022.csv", "fips/inc_2022.csv"
+    pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
+    pcsv -g 'r["year"] == "2019"' -f fips/county_pop_2010s.csv > /tmp/pop_2019.csv
+    pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
+    less fips/voting_2020.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2019.csv | pjoin --left -k fips fips/edu_2022.csv | pjoin --left -k fips fips/inc_2022.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2022"])) if r["inc_2022"] and r["inc_2022"] != "-666666666" else ""; r["edu_X_white"] = float(r["edu_2022"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2022"] else ""' > $OUTPUT0
 
 "election/election_2016.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2018.csv", "fips/inc_2018.csv"
     pcsv -g 'r["year"] == "2016"' -f fips/county_voting.csv > /tmp/voting_2016.csv
     pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
     pcsv -g 'r["year"] == "2016"' -f fips/county_pop_2010s.csv > /tmp/pop_2016.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
-    less /tmp/voting_2016.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2016.csv | pjoin --left -k fips fips/edu_2018.csv | pjoin --left -k fips fips/inc_2018.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2018"])) if r["inc_2018"] else ""' > $OUTPUT0
+    less /tmp/voting_2016.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2016.csv | pjoin --left -k fips fips/edu_2018.csv | pjoin --left -k fips fips/inc_2018.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2018"])) if r["inc_2018"] else ""; r["edu_X_white"] = float(r["edu_2018"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2018"] else ""' > $OUTPUT0
 
 "election/election_2012.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2014.csv", "fips/inc_2014.csv"
     pcsv -g 'r["year"] == "2012"' -f fips/county_voting.csv > /tmp/voting_2012.csv
     pcsv -g 'r["year"] == "2010"' -f fips/county_area.csv > /tmp/area_2010.csv
     pcsv -g 'r["year"] == "2012"' -f fips/county_pop_2010s.csv > /tmp/pop_2012.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
-    less /tmp/voting_2012.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2012.csv | pjoin --left -k fips fips/edu_2014.csv | pjoin --left -k fips fips/inc_2014.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2014"])) if r["inc_2014"] else ""' > $OUTPUT0
+    less /tmp/voting_2012.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2010.csv | pjoin --left -k fips /tmp/pop_2012.csv | pjoin --left -k fips fips/edu_2014.csv | pjoin --left -k fips fips/inc_2014.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"]) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2014"])) if r["inc_2014"] else ""; r["edu_X_white"] = float(r["edu_2014"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2014"] else ""' > $OUTPUT0
 
 "election/election_2008.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2010.csv", "fips/inc_2010.csv"
     pcsv -g 'r["year"] == "2008"' -f fips/county_voting.csv > /tmp/voting_2008.csv
@@ -125,7 +140,7 @@
     pcsv -g 'r["year"] == "2008"' -f fips/county_pop_2000s.csv > /tmp/pop_2008.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate 0 area
-    less /tmp/voting_2008.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2008.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2008.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2008.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""; r["edu_X_white"] = float(r["edu_2010"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2010"] else ""' > $OUTPUT0
 
 "election/election_2004.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2010.csv", "fips/inc_2010.csv"
     pcsv -g 'r["year"] == "2004"' -f fips/county_voting.csv > /tmp/voting_2004.csv
@@ -133,7 +148,7 @@
     pcsv -g 'r["year"] == "2004"' -f fips/county_pop_2000s.csv > /tmp/pop_2004.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate counties with 0 area
-    less /tmp/voting_2004.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2004.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2004.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2004.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""; r["edu_X_white"] = float(r["edu_2010"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2010"] else ""' > $OUTPUT0
 
 "election/election_2000.csv" <- "fips/county_voting.csv", "fips/county_area.csv", "fips/county_pop_2010s.csv", "fips/edu_2010.csv", "fips/inc_2010.csv"
     pcsv -g 'r["year"] == "2000"' -f fips/county_voting.csv > /tmp/voting_2000.csv
@@ -141,7 +156,7 @@
     pcsv -g 'r["year"] == "2000"' -f fips/county_pop_2000s.csv > /tmp/pop_2000.csv
     pcsv -g 'r["YEAR"] == "2010"' -f fips/religion.csv > /tmp/religion_2010.csv
     #TODO: investigate counties with 0 area
-    less /tmp/voting_2000.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2000.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""' > $OUTPUT0
+    less /tmp/voting_2000.csv | pjoin --left -k fips /tmp/religion_2010.csv | pjoin --left -k fips /tmp/area_2000.csv | pjoin --left -k fips /tmp/pop_2000.csv | pjoin --left -k fips fips/edu_2010.csv | pjoin --left -k fips fips/inc_2010.csv | pcsv -b 'import math' -p 'r["density"] = math.log(float(r["population"]) / float(r["area"])) if (r["population"] and r["area"] and float(r["area"]) > 0) else ""' | pcsv -b 'import math' -p 'r["log_inc"] = math.log(float(r["inc_2010"])) if r["inc_2010"] else ""; r["edu_X_white"] = float(r["edu_2010"])*float(r["white_pct"]) if r["white_pct"] and r["edu_2010"] else ""' > $OUTPUT0
 
 
 "%regress" <-
@@ -150,4 +165,5 @@
     less election/election_2008.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2010,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
     less election/election_2012.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2014,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
     less election/election_2016.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2018,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
-    less election/election_2020.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2018,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
+    less election/election_2020.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2022,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
+    less election/election_2024.csv | pcsv -g 'r["fips"] != "46113" and r["fips"][:2] != "02"' | linreg -w totalvotes -t rep_margin -c white_pct,edu_2022,log_inc,density,black_pct,hispanic_pct,religious_frac --alpha 0.001
